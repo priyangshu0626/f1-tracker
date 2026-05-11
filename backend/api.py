@@ -28,19 +28,26 @@ app = Flask(__name__, static_folder=static_dir)
 CORS(app)
 
 # Initialize data loader
-data_loader = DataLoader()
+data_loader = None
 
 
 @app.route("/", defaults={'path': ''})
 @app.route("/<path:path>")
 def serve(path):
-    if path.startswith("api/"):
-        return jsonify({"error": "Not found"}), 404
-    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
-        return send_from_directory(app.static_folder, path)
-    else:
+    try:
+        if path.startswith("api/"):
+            return jsonify({"error": "Not found"}), 404
+
+        file_path = os.path.join(app.static_folder, path)
+
+        if path != "" and os.path.exists(file_path):
+            return send_from_directory(app.static_folder, path)
+
         return send_from_directory(app.static_folder, "index.html")
 
+    except Exception as e:
+        logger.exception("Static serving failed")
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/health")
 def health():
@@ -50,6 +57,13 @@ def health():
 
 @app.route("/api/tracks", methods=["GET"])
 def get_tracks():
+    global data_loader
+
+    if data_loader is None:
+        data_loader = DataLoader()
+
+    tracks = data_loader.get_all_tracks()
+    return jsonify({"tracks": tracks})
     """Return all available track configurations."""
     tracks = data_loader.get_all_tracks()
     return jsonify({"tracks": tracks})
@@ -88,11 +102,16 @@ def run_simulation():
     custom_strategies = data.get("strategies")
 
     # Get track config
-    try:
-        track_config = data_loader.get_calibrated_track(track_name)
-    except ValueError:
-        return jsonify({"error": f"Unknown track: {track_name}"}), 400
+   try:
+    global data_loader
 
+    if data_loader is None:
+        data_loader = DataLoader()
+
+    track_config = data_loader.get_calibrated_track(track_name)
+
+except ValueError:
+    return jsonify({"error": f"Unknown track: {track_name}"}), 400
     # Build strategy engine
     engine = StrategyEngine(track_config)
 
@@ -132,10 +151,16 @@ def run_sensitivity():
     aggression = float(data.get("aggression", 0.5))
     strategy_stints = data.get("strategy")
 
-    try:
-        track_config = data_loader.get_calibrated_track(track_name)
-    except ValueError:
-        return jsonify({"error": f"Unknown track: {track_name}"}), 400
+ try:
+    global data_loader
+
+    if data_loader is None:
+        data_loader = DataLoader()
+
+    track_config = data_loader.get_calibrated_track(track_name)
+
+except ValueError:
+    return jsonify({"error": f"Unknown track: {track_name}"}), 400
 
     engine = StrategyEngine(track_config)
 
@@ -157,11 +182,17 @@ def get_degradation_curves():
     data = request.get_json()
     track_name = data.get("track", "monza")
 
-    try:
-        track_config = data_loader.get_calibrated_track(track_name)
-    except ValueError:
-        return jsonify({"error": f"Unknown track: {track_name}"}), 400
+   try:
+    global data_loader
 
+    if data_loader is None:
+        data_loader = DataLoader()
+
+    track_config = data_loader.get_calibrated_track(track_name)
+
+except ValueError:
+    return jsonify({"error": f"Unknown track: {track_name}"}), 400
+    
     model = TyreModel(track_config["degradation_factor"])
     laps = track_config["laps"]
 
@@ -186,10 +217,16 @@ def single_simulation():
     aggression = float(data.get("aggression", 0.5))
     strategy = data.get("strategy")
 
-    try:
-        track_config = data_loader.get_calibrated_track(track_name)
-    except ValueError:
-        return jsonify({"error": f"Unknown track: {track_name}"}), 400
+try:
+    global data_loader
+
+    if data_loader is None:
+        data_loader = DataLoader()
+
+    track_config = data_loader.get_calibrated_track(track_name)
+
+except ValueError:
+    return jsonify({"error": f"Unknown track: {track_name}"}), 400
 
     if not strategy:
         strategies = generate_strategies(track_config["laps"])
